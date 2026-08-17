@@ -11,12 +11,21 @@
  */
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "@prisma/client";
-import { seedAll } from "@/server/demo/seed";
 
 const TEST_URL =
   process.env.TEST_DATABASE_URL ??
   "postgresql://scout:scout_dev_pw@localhost:5432/internship_scout_test";
 process.env.DATABASE_URL = TEST_URL;
+
+/* Imported inside the test, not at the top. The seed reaches the shared Prisma
+   singleton in `@/lib/prisma`, which reads DATABASE_URL when its module first
+   evaluates — and static imports are hoisted above the assignment right above
+   this comment. Statically imported, the client is built before the test URL
+   exists and the run dies with "Environment variable not found: DATABASE_URL".
+   It passes in isolation only when a stray .env happens to supply one, which is
+   how this hid the first time. Same reason the other files here import their
+   route handlers dynamically. */
+const loadSeed = async () => (await import("@/server/demo/seed")).seedAll;
 
 const prisma = new PrismaClient({ datasources: { db: { url: TEST_URL } } });
 
@@ -48,6 +57,7 @@ afterAll(async () => {
 
 describe("seedAll", () => {
   it("builds the dataset, then runs again without failing or duplicating", async () => {
+    const seedAll = await loadSeed();
     await seedAll(prisma);
     const first = await counts();
 

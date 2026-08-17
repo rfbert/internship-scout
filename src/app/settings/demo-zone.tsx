@@ -28,7 +28,7 @@ export function DemoZone() {
       !window.confirm(
         "Rebuild the demo data?\n\n" +
           "Anything anyone changed — accepted listings, tracker stages, notes — goes back " +
-          "to how it was deployed. Takes up to a minute, because every posting is scored again."
+          "to how it was deployed. Takes a few seconds; every posting is scored again."
       )
     ) {
       return;

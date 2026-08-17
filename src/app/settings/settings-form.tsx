@@ -389,7 +389,7 @@ export function SettingsForm({
               checked={sponsorshipRequired}
               onChange={setSponsorshipRequired}
               label="Needs future work-authorization sponsorship"
-              hint="Only changes how the AI is told to read a posting. The sponsorship rules run either way."
+              hint="Recorded on the profile. The deterministic sponsorship rules read the posting the same way either way, so nothing in this build scores differently."
             />
           </div>
         </div>
