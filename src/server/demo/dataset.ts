@@ -366,6 +366,23 @@ export async function seedDemo(prisma: PrismaClient, userId: string): Promise<vo
     // pipeline accepts — destructured purely to drop it from the input.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { demonstrates, ...input } = p;
+
+    // Skip what is already here, and skip it *before* calling the pipeline.
+    // `ingestManualPosting` throws 409 on a posting that is already tracked —
+    // correct for a person pasting a URL twice, fatal for a seed. Without this
+    // the second run of the seed aborts, which on a hosted deploy means every
+    // redeploy after the first one fails its build.
+    const already = input.postingUrl
+      ? await prisma.internshipListing.findFirst({
+          where: { postingUrl: input.postingUrl },
+          select: { id: true },
+        })
+      : null;
+    if (already) {
+      if (input.postingUrl) byUrl.set(input.postingUrl, already.id);
+      continue;
+    }
+
     const tracked = TRACKED.some((t) => t.url === input.postingUrl);
     const { listingId } = await ingestManualPosting({ ...input, track: tracked });
     if (input.postingUrl) byUrl.set(input.postingUrl, listingId);
