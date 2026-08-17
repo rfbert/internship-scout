@@ -362,7 +362,10 @@ export async function seedDemo(prisma: PrismaClient, userId: string): Promise<vo
   // ── Listings, scored by the real pipeline ───────────────────────────────
   const byUrl = new Map<string, string>();
   for (const p of POSTINGS) {
-    const { demonstrates: _demonstrates, ...input } = p;
+    // `demonstrates` is a note to whoever reads this file, not something the
+    // pipeline accepts — destructured purely to drop it from the input.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { demonstrates, ...input } = p;
     const tracked = TRACKED.some((t) => t.url === input.postingUrl);
     const { listingId } = await ingestManualPosting({ ...input, track: tracked });
     if (input.postingUrl) byUrl.set(input.postingUrl, listingId);
