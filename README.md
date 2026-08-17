@@ -112,6 +112,13 @@ Then open http://localhost:3000. The seed loads the demo dataset — invented
 companies, invented postings, scored on the spot by the real engines. Nothing in
 it came from a real search.
 
+### Deploying a copy
+
+`vercel.json` sets the build to migrate and seed before building, so a fresh
+deploy comes up already populated with the demo dataset. Point `DATABASE_URL` at
+any Postgres and it will stand itself up. The seed is idempotent — redeploys do
+not duplicate it.
+
 ## Tests
 
 ```bash
