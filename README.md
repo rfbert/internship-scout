@@ -114,10 +114,15 @@ it came from a real search.
 
 ### Deploying a copy
 
-`vercel.json` sets the build to migrate and seed before building, so a fresh
-deploy comes up already populated with the demo dataset. Point `DATABASE_URL` at
-any Postgres and it will stand itself up. The seed is idempotent — redeploys do
-not duplicate it.
+`vercel.json` runs [`scripts/vercel-build.sh`](scripts/vercel-build.sh), which
+migrates and seeds before building — so pointing this repository at an empty
+database is enough to bring up a populated demo. The seed is idempotent, so
+redeploys reuse the dataset rather than stacking a second copy of it.
+
+Migrations run over the provider's *direct* connection string when one exists
+(`DATABASE_URL_UNPOOLED` / `POSTGRES_URL_NON_POOLING`), falling back to
+`DATABASE_URL`. Prisma Migrate takes an advisory lock, which cannot survive a
+transaction-mode pooler; runtime still uses the pooled `DATABASE_URL`.
 
 ## Tests
 
