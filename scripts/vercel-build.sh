@@ -15,6 +15,11 @@
 # So: migrate and seed over the direct URL when the host provides one, fall back
 # to DATABASE_URL when it does not (a plain Postgres, or local Docker, where the
 # single URL is already direct). Runtime keeps using DATABASE_URL either way.
+# A related trap, since it bit this project: put the functions in the same
+# region as the database. `vercel.json` pins `pdx1` because the database lives
+# in us-west-2. Left on the platform default (iad1, Virginia) every query made
+# a cross-country round trip, and the seed — which is hundreds of sequential
+# queries — took 55s instead of seconds.
 set -e
 
 DIRECT_URL="${DATABASE_URL_UNPOOLED:-${POSTGRES_URL_NON_POOLING:-$DATABASE_URL}}"
