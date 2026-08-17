@@ -1,0 +1,266 @@
+@import "tailwindcss";
+
+/* ── THE REGISTER — design tokens ──────────────────────────────────────────
+   The internship hunt as a working archive: ledger-green "eye-ease" paper,
+   iron-gall ink, feint blue row rules, and a carmine double margin-rule that
+   is also functional — the keyboard caret lives in it.
+
+   Day ("Reading Room") / night ("Stacks After Hours") live in one light-dark()
+   declaration per token; [data-theme] (set by ThemeToggle, persisted in
+   localStorage, applied pre-paint by the inline script in layout.tsx)
+   overrides the system default via color-scheme.
+
+   Contrast contract — verified in CI by scripts/check-contrast.mjs, which
+   parses THIS FILE. Every fg in {ink, ink-2, ink-3, carmine, blue, green,
+   ochre} clears 4.5:1 on every bg in {paper, surface, surface-2, inset, sel},
+   in both themes. --rule, --feint, --well-grid and --well-rule are declared
+   decorative there: color never carries information on its own. */
+
+:root {
+  color-scheme: light dark;
+
+  /* Surfaces */
+  --paper:      light-dark(#F2F3ED, #17191D);
+  --surface:    light-dark(#FBFBF7, #1F2227);
+  --surface-2:  light-dark(#ECEEE5, #24272D);
+  --inset:      light-dark(#E6E8DF, #2A2E35);
+  --sel:        light-dark(#E9EDF6, #252B38);
+
+  /* Ink */
+  --ink:        light-dark(#1F242B, #EAE8DF);
+  --ink-2:      light-dark(#4C525A, #B6B4AA);
+  --ink-3:      light-dark(#61676E, #9A9890);   /* Amendment A — was #6E747B / #8B8A82 */
+
+  /* Rules — graphic only, never text */
+  --rule:       light-dark(#C8CBC0, #3A3E45);
+  --feint:      light-dark(#DFE2E7, #2B2F36);
+  /* The fold shade at a scrolling sheet's edge — see `.register-scroll`.
+     Ink and pure black at low alpha, so it darkens whatever surface it lies on
+     instead of tinting it. Decorative: it says "the sheet continues", and the
+     content it hints at is always reachable without seeing it. */
+  --scroll-shade: light-dark(#1F242B26, #00000073);
+
+  /* Semantic */
+  --carmine:    light-dark(#A32015, #EF7A70);   /* Amendment A — dark was #E8655B */
+  --blue:       light-dark(#2B4CC0, #93ACF5);
+  --green:      light-dark(#23703F, #7CC494);
+  --ochre:      light-dark(#7E5200, #D9B15C);
+  --on-accent:  light-dark(#FFFFFF, #14161B);
+
+  /* Instrument wells — CONSTANT IN BOTH THEMES.
+     An oscilloscope screen is black in a lit lab too: the data layer must not
+     change color when the theme flips, and well marks may only ever use the
+     semantic well colors below — never a single accent hue. */
+  --well-bg:      #14171B;
+  --well-fg:      #EAE8DF;
+  --well-grid:    #23272D;   /* graticule — deliberately sub-threshold */
+  --well-rule:    #343941;
+  /* The well's OUTER edge — the one token in this block that is not
+     theme-invariant, because it is chrome rather than data.
+
+     In day the well needs no help: a #14171B panel on #F2F3ED paper is a
+     16.1:1 step, and the fill alone announces it. In night the same panel sits
+     on #17191D paper at 1.02:1 — the fill difference is gone, and the edge is
+     the only thing left saying "instrument". Borrowing --rule there gave that
+     edge 1.64:1, so the well quietly dissolved into the page after dark. This
+     value carries 3.08:1 against night paper and 3.14:1 against the well fill,
+     clearing the 3:1 that WCAG 1.4.11 asks of a boundary that is doing real
+     work, and no more — the panel should read as inset, not boxed. */
+  --well-edge:    light-dark(#C8CBC0, #606770);
+  --well-carmine: #EF7A70;   /* Amendment A — was #E8655B */
+  --well-blue:    #93ACF5;
+  --well-green:   #7CC494;
+  --well-ochre:   #D9B15C;
+  --well-muted:   #8B8A82;
+  --well-cursor:  #EAE8DF;
+
+  /* Space — 4-pt scale */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-6: 24px; --sp-8: 32px; --sp-12: 48px;
+  --gutter: 24px;
+  --margin-rule: 40px;   /* fixed left margin at every breakpoint */
+
+  /* Heights */
+  --row-h: 34px;  --micro-row-h: 24px; --section-h: 28px;
+  --spine-h: 64px; --tape-h: 72px;     --footnote-h: 36px;
+
+  /* --radius is declared in the @theme block below so Tailwind's whole radius
+     scale collapses to it. 2px everywhere — index cards have corners. */
+  --shadow-pulled: 0 10px 30px light-dark(rgb(15 20 30 / .10), rgb(0 0 0 / .45));
+}
+
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"]  { color-scheme: dark; }
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-inset: var(--inset);
+  --color-sel: var(--sel);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-rule: var(--rule);
+  --color-feint: var(--feint);
+  --color-carmine: var(--carmine);
+  --color-blue: var(--blue);
+  --color-green: var(--green);
+  --color-ochre: var(--ochre);
+  --color-on-accent: var(--on-accent);
+  --color-well-bg: var(--well-bg);
+  --color-well-fg: var(--well-fg);
+  --color-well-grid: var(--well-grid);
+  --color-well-rule: var(--well-rule);
+  --color-well-edge: var(--well-edge);
+  --color-well-carmine: var(--well-carmine);
+  --color-well-blue: var(--well-blue);
+  --color-well-green: var(--well-green);
+  --color-well-ochre: var(--well-ochre);
+  --color-well-muted: var(--well-muted);
+  --color-well-cursor: var(--well-cursor);
+
+  --font-sans: var(--font-archivo);
+  --font-mono: var(--font-plex-mono);
+}
+
+/* Plain @theme (not inline): these are literal values, and Tailwind emits them.
+   Collapsing the WHOLE radius scale to 2px means every one of the 130 existing
+   rounded-* utilities in src/**.tsx renders at 2px the moment this lands —
+   before a single page agent deletes a class. Verified against
+   node_modules/tailwindcss/theme.css:397-404,508 (--radius-xs…4xl, --radius)
+   and :327-331 (--breakpoint-*). No src file currently uses xl: or 2xl:, so
+   redefining those two breakpoints is free. */
+@theme {
+  --radius: 2px;
+  --radius-xs: 2px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 2px;
+  --radius-2xl: 2px;
+  --radius-3xl: 2px;
+  --radius-4xl: 2px;
+
+  /* Custom breakpoints for the masthead overflow (A4) and spine index (A9).
+     --breakpoint-2xl is redefined from Tailwind's 96rem (1536px) to 1600px so
+     the spine's three label tiers land where A9 specifies. */
+  --breakpoint-spine: 1180px;
+  /* --breakpoint-nav is deliberately absent. It said 1360px, the masthead
+     switches at 1460px, and nothing read the token — the two files had drifted
+     until the nav overflowed its own track by 18px with eleven links, in a
+     component whose contract is that it never wraps or scrolls. The number is
+     a fact about what the masthead CONTAINS, so it lives beside the contents
+     it is measured from (see the derivation at the top of masthead.tsx) rather
+     than here, where it could go stale again the next time a destination is
+     added. A second, unread copy is not a source of truth; it is a decoy. */
+  --breakpoint-2xl: 1600px;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 13.5px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;      /* global — every numeral aligns */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: var(--sel); }
+
+:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+  border-radius: var(--radius);
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--rule); border: 2px solid var(--paper); }
+::-webkit-scrollbar-track { background: transparent; }
+
+h1, h2, h3 { letter-spacing: -0.01em; text-wrap: balance; }
+
+/* The certainty stroke (B4). Applied by <Estimated>; declared here so the
+   dashed underline is one definition, not a class string repeated nine times. */
+.register-estimated {
+  border-bottom: 1px dashed currentColor;
+}
+
+/* ── The fold shade — the Register's scroll affordance ──────────────────────
+   A ledger wider than its column scrolls INSIDE ITSELF; the page never scrolls
+   sideways. That rule holds, but nothing said the sheet continued: at 1280 the
+   review, tracker, opportunities and companies ledgers each hid 30–150px of
+   columns off the right edge, and at 1100 seven of them hid up to 330px. The
+   only signal was a scrollbar, which macOS keeps hidden until you touch the
+   trackpad — so on a first read the columns simply were not there.
+
+   This is the one affordance for that, and `Ledger` wears it, so every table in
+   the app gets it at once. Four background layers:
+
+     · two COVERS in the sheet's own color, attached to the CONTENT (`local`),
+       so they travel with it;
+     · two SHADES, attached to the BOX (`scroll`), so they stay pinned at the
+       edges.
+
+   At the left end the left cover sits on top of the left shade and hides it.
+   Scroll right and the cover travels away, uncovering the shade: a fold of
+   paper turning under the binding. Cover 30px with 18px of solid color leads
+   the 14px shade, so "no overflow" means no mark at all.
+
+   No listeners, no state, nothing to keep in sync — and nothing moves, so
+   `prefers-reduced-motion` has nothing to zero. */
+.register-scroll {
+  background-color: var(--surface);
+  background-image:
+    linear-gradient(to right, var(--surface) 18px, transparent),
+    linear-gradient(to left, var(--surface) 18px, transparent),
+    linear-gradient(to right, var(--scroll-shade), transparent),
+    linear-gradient(to left, var(--scroll-shade), transparent);
+  background-position: left center, right center, left center, right center;
+  background-size: 30px 100%, 30px 100%, 14px 100%, 14px 100%;
+  background-repeat: no-repeat;
+  background-attachment: local, local, scroll, scroll;
+}
+
+/* On paper there is no off-screen: the sheet prints whole. */
+@media print {
+  .register-scroll { background-image: none; }
+}
+
+/* Fingers need bigger targets than cursors. Preserved from the previous sheet. */
+@media (pointer: coarse) {
+  button, [role="button"], select,
+  input:not([type="checkbox"]):not([type="radio"]), textarea { min-height: 40px; }
+}
+
+/* Motion: 120ms ease-out on hover/expand/collapse only. Caret jumps are
+   instant — keyboard truth. Nothing animates on entry; nothing meaning-bearing
+   moves. All "On the Line" draw-in keyframes are deleted. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    /* Delay must be zeroed too: a zeroed duration alone would still flash a
+       staggered set in one-by-one (invisible until each delay elapses). */
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Print — A8. Not a print route, not a PDF generator: one media block that
+   turns the screen Register into a working sheet. */
+@media print {
+  :root { color-scheme: light; }
+  .register-masthead,
+  .register-footnote,
+  .no-print          { display: none !important; }
+  body               { background: #fff; }
+  .register-well     { background: #fff; color: #1F242B; border: 1px solid #C8CBC0; }
+  .register-well *   { color: #1F242B !important; }
+  .register-margin   { display: none; }         /* the carmine double rule is screen furniture */
+  main               { max-width: none; padding: 0; }
+  section, tr        { break-inside: avoid; }
+  a[href]::after     { content: "";}            /* no URL expansion — the digest is a working sheet */
+}

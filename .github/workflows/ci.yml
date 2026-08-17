@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request: {}
+
+# Tests only — the workflow token never needs write access.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: scout
+          POSTGRES_PASSWORD: scout_dev_pw
+          POSTGRES_DB: internship_scout_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U scout"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://scout:scout_dev_pw@localhost:5432/internship_scout_test
+      TEST_DATABASE_URL: postgresql://scout:scout_dev_pw@localhost:5432/internship_scout_test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Parses src/app/globals.css and asserts AA in both themes. Needs no
+      # database and no build, so a palette regression fails in seconds rather
+      # than 20 minutes down the build/test path.
+      - name: Contrast (WCAG AA)
+        run: npm run check:contrast
+      - run: npx prisma migrate deploy
+      - name: Typecheck & build
+        run: npm run build
+      - name: Unit tests
+        run: npm test
+      - name: Integration tests
+        run: npm run test:integration

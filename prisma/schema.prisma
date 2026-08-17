@@ -1,0 +1,931 @@
+// Internship Scout — full relational schema (PostgreSQL 16)
+// Single-user today; every user-owned table carries userId so auth can be added later.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────── Enums ───────────────────────────────
+
+enum RoleCategory {
+  AI_PRODUCT_MANAGEMENT
+  PM_FOR_AI_PRODUCTS
+  TECHNICAL_PM
+  AI_ENGINEERING
+  APPLIED_AI
+  ML_ENGINEERING
+  APM_PROGRAM
+  PRODUCT_ROTATIONAL
+  OTHER_EXCEPTIONAL
+  DATA_SCIENCE
+  RESEARCH
+  SOFTWARE_ENGINEERING
+  OTHER
+}
+
+enum ListingStatus {
+  ACTIVE
+  CLOSED
+  REMOVED
+  EXPIRED
+  DRAFT
+}
+
+enum WorkArrangement {
+  ONSITE
+  HYBRID
+  REMOTE
+  UNKNOWN
+}
+
+enum PayType {
+  HOURLY
+  MONTHLY
+  STIPEND
+  UNPAID
+  UNKNOWN
+}
+
+enum UgEligibility {
+  UNDERGRAD_EXPLICIT
+  UNDERGRAD_LIKELY
+  AMBIGUOUS
+  GRAD_PREFERRED
+  GRAD_ONLY
+  PHD_ONLY
+}
+
+enum SponsorshipCategory {
+  SPONSORSHIP_OFFERED
+  CPT_OPT_ACCEPTED
+  FUTURE_POSSIBLE
+  COMPANY_HISTORY
+  UNCERTAIN
+  NO_INFO
+  EXPLICITLY_UNAVAILABLE
+  UNRESTRICTED_AUTH_REQUIRED
+  CITIZENSHIP_REQUIRED
+  CLEARANCE_REQUIRED
+  USER_INELIGIBLE
+}
+
+enum SponsorshipConfidence {
+  CONFIRMED
+  HIGH
+  MODERATE
+  LOW
+  UNKNOWN
+  EXPLICITLY_UNAVAILABLE
+}
+
+/// How classification vocabulary is printed in the UI (spec A5). PLAIN spells
+/// bands and sponsorship out ("EXCEPTIONAL", "PRIOR SPONSOR"); COMPACT prints
+/// the register codes ("EXC", "HIST"). Stage words, verdict stamps and every
+/// title/aria-label stay in plain English in both modes.
+enum NotationMode {
+  PLAIN
+  COMPACT
+}
+
+enum ScoreBand {
+  EXCEPTIONAL
+  HIGH_PRIORITY
+  STRONG
+  WORTH_REVIEWING
+  REACH
+  LOW_PRIORITY
+  INELIGIBLE
+}
+
+enum DecisionState {
+  PENDING_REVIEW
+  ACCEPTED
+  SAVED_FOR_LATER
+  DISCARDED
+  MARKED_INELIGIBLE
+  MARKED_DUPLICATE
+  ALREADY_APPLIED
+}
+
+enum ApplicationStage {
+  INTERESTED
+  PREPARING
+  READY_TO_APPLY
+  APPLIED
+  ONLINE_ASSESSMENT
+  RECRUITER_SCREEN
+  FIRST_INTERVIEW
+  TECHNICAL_INTERVIEW
+  PRODUCT_CASE_INTERVIEW
+  FINAL_INTERVIEW
+  OFFER
+  REJECTED
+  WITHDRAWN
+  CLOSED
+}
+
+enum Priority {
+  URGENT
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ListingOrigin {
+  SCRAPED // discovered by the automated collectors
+  MANUAL  // created by the user (URL/CSV/manual import or tracker add)
+}
+
+enum SourceKind {
+  GITHUB_REPO
+  GREENHOUSE
+  LEVER
+  ASHBY
+  SMARTRECRUITERS
+  WORKDAY
+  COMPANY_PAGE
+  URL_IMPORT
+  CSV_IMPORT
+  MANUAL
+}
+
+enum RequirementKind {
+  REQUIRED_QUALIFICATION
+  PREFERRED_QUALIFICATION
+  DEGREE_REQUIREMENT
+  ELIGIBLE_MAJORS
+  GRADUATION_WINDOW
+  TECH_SKILL_REQUIRED
+  TECH_SKILL_PREFERRED
+  PRODUCT_SKILL
+}
+
+enum EvidenceKind {
+  H1B_FILINGS
+  EMPLOYER_STATEMENT
+  UNIVERSITY_DOC
+  PRIOR_POSTING
+  COMPANY_POLICY
+  VERIFIED_REPORT
+}
+
+enum EvidenceReliability {
+  STRONG
+  MODERATE
+  WEAK
+}
+
+enum RunStatus {
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+enum RunTrigger {
+  SCHEDULED
+  MANUAL
+}
+
+enum EventLevel {
+  INFO
+  WARN
+  ERROR
+}
+
+enum DeadlineKind {
+  APPLICATION_DEADLINE
+  SUGGESTED_APPLY_BY
+  FOLLOW_UP
+  ASSESSMENT_DEADLINE
+  INTERVIEW
+  REFERRAL_REMINDER
+  OFFER_DEADLINE
+}
+
+enum ReferralStage {
+  POTENTIAL_CONTACT
+  CONTACTED
+  RESPONDED
+  INFORMATIONAL_CONVERSATION
+  REFERRAL_REQUESTED
+  REFERRAL_RECEIVED
+  DECLINED
+  NO_RESPONSE
+}
+
+enum EmailSendMode {
+  RESEND
+  SMTP
+  DRY_RUN
+}
+
+enum NoteEntity {
+  LISTING
+  APPLICATION
+  COMPANY
+  CONTACT
+}
+
+// ─────────────────────────────── Users ───────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  preferences  UserPreference?
+  decisions    UserListingDecision[]
+  applications Application[]
+  notes        Note[]
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model UserPreference {
+  id     String @id @default(cuid())
+  userId String @unique @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Weights keyed by score component, values sum to 100. See docs/SCORING.md.
+  scoringWeights      Json    @map("scoring_weights")
+  reviewThresholdBand ScoreBand @default(WORTH_REVIEWING) @map("review_threshold_band")
+  emailOnEmptyRuns    Boolean @default(false) @map("email_on_empty_runs")
+  emailEnabled        Boolean @default(true) @map("email_enabled")
+  emailTo             String? @map("email_to")
+  preferredArrangement WorkArrangement @default(ONSITE) @map("preferred_arrangement")
+  timezone            String  @default("America/Los_Angeles")
+  graduationDate      DateTime? @map("graduation_date")
+  // Target internship cycle, e.g. "SUMMER_2027". Null → app default (SEASON).
+  targetSeason        String? @map("target_season")
+  // Overrides for ROLE_ALIGNMENT_SCORES: partial Record<RoleCategory, 0-100>.
+  roleAlignmentScores Json?   @map("role_alignment_scores")
+  // Overrides for BAND_THRESHOLDS: Array<{ band: ScoreBand; min: number }>.
+  bandThresholds      Json?   @map("band_thresholds")
+  // False → no work-authorization constraints in AI profile prompts.
+  sponsorshipRequired Boolean? @default(true) @map("sponsorship_required")
+  // Band/sponsorship notation grammar. PLAIN is the default: a new reader has
+  // not learned the codes yet.
+  notationMode        NotationMode @default(PLAIN) @map("notation_mode")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("user_preferences")
+}
+
+// ────────────────────────────── Companies ──────────────────────────────
+
+model Company {
+  id             String  @id @default(cuid())
+  name           String
+  normalizedName String  @unique @map("normalized_name")
+  website        String?
+  industry       String?
+  sizeRange      String? @map("size_range") // e.g. "1-50", "1000-5000"
+  stage          String? // e.g. "Seed", "Series C", "Public"
+  reputationNote String? @map("reputation_note")
+  aiRelevance    String? @map("ai_relevance") // free text: company AI strategy summary
+  hqCity         String? @map("hq_city")
+  hqState        String? @map("hq_state")
+  hqCountry      String? @map("hq_country")
+  priorityScore  Int?    @map("priority_score") // 0-100 user/company-level priority
+  internshipProgramNote String? @map("internship_program_note")
+  isSample       Boolean @default(false) @map("is_sample")
+  deletedAt      DateTime? @map("deleted_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  locations           CompanyLocation[]
+  sponsorshipEvidence CompanySponsorshipEvidence[]
+  listings            InternshipListing[]
+  contacts            Contact[]
+  notes               Note[]
+
+  @@index([name])
+  @@map("companies")
+}
+
+model CompanyLocation {
+  id        String  @id @default(cuid())
+  companyId String  @map("company_id")
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  city      String?
+  state     String?
+  country   String  @default("US")
+  isHq      Boolean @default(false) @map("is_hq")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([companyId])
+  @@map("company_locations")
+}
+
+model CompanySponsorshipEvidence {
+  id          String              @id @default(cuid())
+  companyId   String              @map("company_id")
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  kind        EvidenceKind
+  reliability EvidenceReliability @default(MODERATE)
+  sourceName  String              @map("source_name")
+  sourceUrl   String?             @map("source_url")
+  evidenceDate DateTime?          @map("evidence_date")
+  summary     String
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  @@index([companyId])
+  @@map("company_sponsorship_evidence")
+}
+
+// ────────────────────────────── Listings ──────────────────────────────
+
+model InternshipListing {
+  id              String        @id @default(cuid())
+  companyId       String        @map("company_id")
+  company         Company       @relation(fields: [companyId], references: [id])
+  title           String
+  normalizedTitle String        @map("normalized_title")
+  roleCategory    RoleCategory  @default(OTHER) @map("role_category")
+  season          String        @default("SUMMER_2027")
+  seasonEvidence  String?       @map("season_evidence") // why we believe the season
+  description     String?
+  descriptionHash String?       @map("description_hash")
+  status          ListingStatus @default(ACTIVE)
+  workArrangement WorkArrangement @default(UNKNOWN) @map("work_arrangement")
+  ugEligibility   UgEligibility @default(AMBIGUOUS) @map("ug_eligibility")
+
+  postedAt            DateTime? @map("posted_at")
+  discoveredAt        DateTime  @default(now()) @map("discovered_at")
+  lastVerifiedAt      DateTime? @map("last_verified_at")
+  closedAt            DateTime? @map("closed_at")
+  applicationDeadline DateTime? @map("application_deadline")
+  deadlineIsEstimated Boolean   @default(false) @map("deadline_is_estimated")
+  durationText        String?   @map("duration_text")
+
+  postingUrl String? @map("posting_url")
+  applyUrl   String? @map("apply_url")
+
+  // Sponsorship/auth language captured verbatim for transparency
+  workAuthLanguage    String? @map("work_auth_language")
+  sponsorshipLanguage String? @map("sponsorship_language")
+
+  // Denormalized snapshots of latest analysis for fast filtering (source of truth
+  // remains the assessment/score tables).
+  currentSponsorshipCategory  SponsorshipCategory?   @map("current_sponsorship_category")
+  currentSponsorshipConfidence SponsorshipConfidence? @map("current_sponsorship_confidence")
+  currentScore Int?       @map("current_score")
+  currentBand  ScoreBand? @map("current_band")
+  aiRelevance  Int?       @map("ai_relevance")  // 0-100
+  pmRelevance  Int?       @map("pm_relevance")  // 0-100
+
+  // Dedup: canonical rows carry a unique dedupe key; merged duplicates carry NULL
+  // (Postgres allows multiple NULLs under a unique constraint) + a group id.
+  dedupeKey        String?  @unique @map("dedupe_key")
+  duplicateGroupId String?  @map("duplicate_group_id")
+  canonicalId      String?  @map("canonical_id")
+  canonical        InternshipListing?  @relation("DuplicateGroup", fields: [canonicalId], references: [id])
+  duplicates       InternshipListing[] @relation("DuplicateGroup")
+
+  isSample  Boolean       @default(false) @map("is_sample")
+  origin    ListingOrigin @default(SCRAPED)
+  deletedAt DateTime?     @map("deleted_at")
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  sources        InternshipSource[]
+  snapshots      ListingSnapshot[]
+  requirements   ListingRequirement[]
+  locations      ListingLocation[]
+  compensation   ListingCompensation[]
+  assessments    ListingSponsorshipAssessment[]
+  scores         ListingScore[]
+  decisions      UserListingDecision[]
+  applications   Application[]
+  deadlines      Deadline[]
+  tags           ListingTag[]
+  notes          Note[]
+  referrals      Referral[]
+
+  @@index([companyId])
+  @@index([status])
+  @@index([roleCategory])
+  @@index([currentBand])
+  @@index([currentSponsorshipCategory])
+  @@index([discoveredAt])
+  @@index([applicationDeadline])
+  @@index([duplicateGroupId])
+  @@map("internship_listings")
+}
+
+model InternshipSource {
+  id           String     @id @default(cuid())
+  listingId    String     @map("listing_id")
+  listing      InternshipListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  dataSourceId String     @map("data_source_id")
+  dataSource   DataSource @relation(fields: [dataSourceId], references: [id])
+  kind         SourceKind
+  externalId   String?    @map("external_id") // ATS job id when known
+  url          String
+  isCanonical  Boolean    @default(false) @map("is_canonical")
+  firstSeenAt  DateTime   @default(now()) @map("first_seen_at")
+  lastSeenAt   DateTime   @default(now()) @map("last_seen_at")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  records InternshipSourceRecord[]
+
+  @@unique([dataSourceId, url])
+  @@index([listingId])
+  @@map("internship_sources")
+}
+
+model InternshipSourceRecord {
+  id         String           @id @default(cuid())
+  sourceId   String           @map("source_id")
+  source     InternshipSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  fetchedAt  DateTime         @default(now()) @map("fetched_at")
+  contentHash String?         @map("content_hash")
+  rawPayload Json?            @map("raw_payload")
+
+  @@index([sourceId])
+  @@map("internship_source_records")
+}
+
+model ListingSnapshot {
+  id          String   @id @default(cuid())
+  listingId   String   @map("listing_id")
+  listing     InternshipListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  capturedAt  DateTime @default(now()) @map("captured_at")
+  contentHash String   @map("content_hash")
+  description String
+  changeNote  String?  @map("change_note")
+
+  @@unique([listingId, contentHash])
+  @@index([listingId])
+  @@map("listing_snapshots")
+}
+
+model ListingRequirement {
+  id        String          @id @default(cuid())
+  listingId String          @map("listing_id")
+  listing   InternshipListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  kind      RequirementKind
+  value     String
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  @@index([listingId])
+  @@map("listing_requirements")
+}
+
+model ListingLocation {
+  id        String  @id @default(cuid())
+  listingId String  @map("listing_id")
+  listing   InternshipListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  rawText   String  @map("raw_text")
+  city      String?
+  state     String?
+  country   String  @default("US")
+  isPrimary Boolean @default(false) @map("is_primary")
+  isRemote  Boolean @default(false) @map("is_remote")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([listingId])
+  @@map("listing_locations")
+}
+
+model ListingCompensation {
+  id         String  @id @default(cuid())
+  listingId  String  @map("listing_id")
+  listing    InternshipListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  payType    PayType @default(UNKNOWN) @map("pay_type")
+  minAmount  Decimal? @map("min_amount") @db.Decimal(12, 2)
+  maxAmount  Decimal? @map("max_amount") @db.Decimal(12, 2)
+  currency   String  @default("USD")
+  period     String? // "hour" | "month" | "total"
+  rawText    String? @map("raw_text")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([listingId])
+  @@map("listing_compensation")
+}
+
+model ListingSponsorshipAssessment {
+  id         String                @id @default(cuid())
+  listingId  String                @map("listing_id")
+  listing    InternshipListing     @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  category   SponsorshipCategory
+  confidence SponsorshipConfidence
+  cptCompatible  Boolean?          @map("cpt_compatible")
+  optCompatible  Boolean?          @map("opt_compatible")
+  stemOptRelevant Boolean?         @map("stem_opt_relevant")
+  futureSponsorshipPotential String? @map("future_sponsorship_potential") // LIKELY|POSSIBLE|UNLIKELY|UNKNOWN
+  matchedText    Json?             @map("matched_text")   // array of verbatim quotes
+  conflictingInfo String?          @map("conflicting_info")
+  evidenceSource String?           @map("evidence_source")
+  evidenceDate   DateTime?         @map("evidence_date")
+  explanation    String
+  engine         String            // "rules" | "rules+ai"
+  model          String?
+  promptVersion  String?           @map("prompt_version")
+  analysisVersion Int              @default(1) @map("analysis_version")
+  createdAt      DateTime          @default(now()) @map("created_at")
+
+  @@unique([listingId, analysisVersion])
+  @@index([listingId])
+  @@map("listing_sponsorship_assessments")
+}
+
+model ListingScore {
+  id        String    @id @default(cuid())
+  listingId String    @map("listing_id")
+  listing   InternshipListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  overall   Int
+  band      ScoreBand
+  careerValue      Int @map("career_value")
+  sponsorship      Int
+  roleAlignment    Int @map("role_alignment")
+  companyQuality   Int @map("company_quality")
+  ugEligibility    Int @map("ug_eligibility")
+  compensation     Int
+  locationFit      Int @map("location_fit")
+  freshness        Int
+  weightsSnapshot  Json   @map("weights_snapshot")
+  recommendedAction String? @map("recommended_action")
+  engine           String  // "rules" | "rules+ai"
+  model            String?
+  promptVersion    String? @map("prompt_version")
+  analysisVersion  Int     @default(1) @map("analysis_version")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  explanations ListingScoreExplanation[]
+
+  @@unique([listingId, analysisVersion])
+  @@index([listingId])
+  @@map("listing_scores")
+}
+
+model ListingScoreExplanation {
+  id      String @id @default(cuid())
+  scoreId String @map("score_id")
+  score   ListingScore @relation(fields: [scoreId], references: [id], onDelete: Cascade)
+  kind    String // POSITIVE | CONCERN | MISSING | ACTION
+  text    String
+  rank    Int    @default(0)
+
+  @@index([scoreId])
+  @@map("listing_score_explanations")
+}
+
+// ─────────────────────────── Decisions & tracker ───────────────────────────
+
+model DiscardReason {
+  id    String @id @default(cuid())
+  key   String @unique
+  label String
+  sortOrder Int @default(0) @map("sort_order")
+
+  decisions UserListingDecision[]
+
+  @@map("discard_reasons")
+}
+
+model UserListingDecision {
+  id        String        @id @default(cuid())
+  userId    String        @map("user_id")
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listingId String        @map("listing_id")
+  listing   InternshipListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  state     DecisionState @default(PENDING_REVIEW)
+  previousState DecisionState? @map("previous_state")
+  discardReasonId String?  @map("discard_reason_id")
+  discardReason   DiscardReason? @relation(fields: [discardReasonId], references: [id])
+  note      String?
+  queuedAt  DateTime      @default(now()) @map("queued_at")
+  decidedAt DateTime?     @map("decided_at")
+  restoredAt DateTime?    @map("restored_at")
+  // hash of listing content at decision time — used to detect material changes
+  decisionContentHash String? @map("decision_content_hash")
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  @@unique([userId, listingId])
+  @@index([state])
+  @@map("user_listing_decisions")
+}
+
+model Application {
+  id        String           @id @default(cuid())
+  userId    String           @map("user_id")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listingId String           @map("listing_id")
+  listing   InternshipListing @relation(fields: [listingId], references: [id])
+  stage     ApplicationStage @default(INTERESTED)
+  priority  Priority         @default(MEDIUM)
+  nextAction String?         @map("next_action")
+  followUpAt DateTime?       @map("follow_up_at")
+  acceptedAt DateTime        @default(now()) @map("accepted_at") // when moved into tracker
+  appliedAt  DateTime?       @map("applied_at")
+  lastActivityAt DateTime    @default(now()) @map("last_activity_at")
+  recruiterName String?      @map("recruiter_name")
+  hiringManagerName String?  @map("hiring_manager_name")
+  contactEmail String?       @map("contact_email")
+  contactLinkedin String?    @map("contact_linkedin")
+  referralStatus String?     @map("referral_status")
+  finalOutcome String?       @map("final_outcome")
+  rejectionReason String?    @map("rejection_reason")
+  deletedAt  DateTime?       @map("deleted_at")
+  createdAt  DateTime        @default(now()) @map("created_at")
+  updatedAt  DateTime        @updatedAt @map("updated_at")
+
+  statusHistory ApplicationStatusHistory[]
+  contacts      ApplicationContact[]
+  referrals     Referral[]
+  deadlines     Deadline[]
+  tags          ApplicationTag[]
+  notes         Note[]
+
+  @@unique([userId, listingId])
+  @@index([stage])
+  @@index([followUpAt])
+  @@map("applications")
+}
+
+model ApplicationStatusHistory {
+  id            String           @id @default(cuid())
+  applicationId String           @map("application_id")
+  application   Application      @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fromStage     ApplicationStage? @map("from_stage")
+  toStage       ApplicationStage @map("to_stage")
+  note          String?
+  changedAt     DateTime         @default(now()) @map("changed_at")
+
+  @@index([applicationId])
+  @@map("application_status_history")
+}
+
+// ─────────────────────────── Contacts & referrals ───────────────────────────
+
+model Contact {
+  id           String   @id @default(cuid())
+  name         String
+  position     String?
+  companyId    String?  @map("company_id")
+  company      Company? @relation(fields: [companyId], references: [id])
+  relationship String?  // e.g. "alum", "recruiter", "cold outreach"
+  email        String?
+  linkedinUrl  String?  @map("linkedin_url")
+  lastContactedAt DateTime? @map("last_contacted_at")
+  nextFollowUpAt  DateTime? @map("next_follow_up_at")
+  notesText    String?  @map("notes_text")
+  deletedAt    DateTime? @map("deleted_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  applications ApplicationContact[]
+  referrals    Referral[]
+  notes        Note[]
+
+  @@index([companyId])
+  @@map("contacts")
+}
+
+model Referral {
+  id            String        @id @default(cuid())
+  contactId     String        @map("contact_id")
+  contact       Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  applicationId String?       @map("application_id")
+  application   Application?  @relation(fields: [applicationId], references: [id])
+  listingId     String?       @map("listing_id")
+  listing       InternshipListing? @relation(fields: [listingId], references: [id])
+  stage         ReferralStage @default(POTENTIAL_CONTACT)
+  requestedAt   DateTime?     @map("requested_at")
+  receivedAt    DateTime?     @map("received_at")
+  notesText     String?       @map("notes_text")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  @@index([contactId])
+  @@index([applicationId])
+  @@map("referrals")
+}
+
+model ApplicationContact {
+  id            String      @id @default(cuid())
+  applicationId String      @map("application_id")
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  contactId     String      @map("contact_id")
+  contact       Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  role          String?     // "recruiter" | "referrer" | "hiring manager" | ...
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  @@unique([applicationId, contactId])
+  @@map("application_contacts")
+}
+
+// ─────────────────────────── Notes, deadlines, tags ───────────────────────────
+
+model Note {
+  id         String     @id @default(cuid())
+  userId     String     @map("user_id")
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity     NoteEntity
+  listingId  String?    @map("listing_id")
+  listing    InternshipListing? @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  applicationId String? @map("application_id")
+  application Application? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  companyId  String?    @map("company_id")
+  company    Company?   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contactId  String?    @map("contact_id")
+  contact    Contact?   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  body       String
+  pinned     Boolean    @default(false)
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+
+  @@index([listingId])
+  @@index([applicationId])
+  @@index([companyId])
+  @@map("notes")
+}
+
+model Deadline {
+  id            String       @id @default(cuid())
+  kind          DeadlineKind
+  title         String
+  dueAt         DateTime     @map("due_at")
+  isEstimated   Boolean      @default(false) @map("is_estimated") // never silently inferred as firm
+  listingId     String?      @map("listing_id")
+  listing       InternshipListing? @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  applicationId String?      @map("application_id")
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  completedAt   DateTime?    @map("completed_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  reminders Reminder[]
+
+  @@index([dueAt])
+  @@index([listingId])
+  @@index([applicationId])
+  @@map("deadlines")
+}
+
+model Reminder {
+  id         String   @id @default(cuid())
+  deadlineId String   @map("deadline_id")
+  deadline   Deadline @relation(fields: [deadlineId], references: [id], onDelete: Cascade)
+  remindAt   DateTime @map("remind_at")
+  sentAt     DateTime? @map("sent_at")
+  channel    String   @default("email")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([remindAt])
+  @@map("reminders")
+}
+
+model Tag {
+  id    String @id @default(cuid())
+  name  String @unique
+  color String @default("gray")
+
+  listings     ListingTag[]
+  applications ApplicationTag[]
+
+  @@map("tags")
+}
+
+model ListingTag {
+  listingId String @map("listing_id")
+  listing   InternshipListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  tagId     String @map("tag_id")
+  tag       Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([listingId, tagId])
+  @@map("listing_tags")
+}
+
+model ApplicationTag {
+  applicationId String @map("application_id")
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  tagId         String @map("tag_id")
+  tag           Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([applicationId, tagId])
+  @@map("application_tags")
+}
+
+// ─────────────────────────── Sources, runs, ops ───────────────────────────
+
+model DataSource {
+  id        String     @id @default(cuid())
+  key       String     @unique // e.g. "github:speedyapply/2027-AI-College-Jobs"
+  name      String
+  kind      SourceKind
+  enabled   Boolean    @default(true)
+  automated Boolean    @default(true) // false => manual/import workflow
+  priority  Int        @default(100)  // lower = fetched first & preferred as canonical within same kind tier
+  rateLimitMs Int      @default(1500) @map("rate_limit_ms")
+  config    Json?      // e.g. { repo, branch, file } or { org: "figma" } for ATS
+  lastSuccessAt DateTime? @map("last_success_at")
+  lastErrorAt   DateTime? @map("last_error_at")
+  lastErrorMessage String? @map("last_error_message")
+  notes     String?
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  sources InternshipSource[]
+  errors  CollectionError[]
+
+  @@map("data_sources")
+}
+
+model AgentRun {
+  id         String    @id @default(cuid())
+  runDate    DateTime  @map("run_date") @db.Date
+  trigger    RunTrigger @default(SCHEDULED)
+  status     RunStatus @default(RUNNING)
+  startedAt  DateTime  @default(now()) @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+  stats      Json?     // counts per stage: fetched, new, merged, rejected, queued, emailed…
+  version    String?   // app git sha / package version
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  events AgentRunEvent[]
+  errors CollectionError[]
+
+  @@index([runDate])
+  @@map("agent_runs")
+}
+
+model AgentRunEvent {
+  id        String     @id @default(cuid())
+  runId     String     @map("run_id")
+  run       AgentRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
+  stage     String     // collect | recheck | normalize | dedupe | eligibility | sponsorship | score | queue | email | report
+  level     EventLevel @default(INFO)
+  message   String
+  data      Json?
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  @@index([runId])
+  @@map("agent_run_events")
+}
+
+model CollectionError {
+  id           String      @id @default(cuid())
+  runId        String?     @map("run_id")
+  run          AgentRun?   @relation(fields: [runId], references: [id], onDelete: SetNull)
+  dataSourceId String?     @map("data_source_id")
+  dataSource   DataSource? @relation(fields: [dataSourceId], references: [id], onDelete: SetNull)
+  url          String?
+  message      String
+  detail       String?
+  resolvedAt   DateTime?   @map("resolved_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  @@index([dataSourceId])
+  @@index([runId])
+  @@map("collection_errors")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String   // NEW_OPPORTUNITY | DEADLINE | RUN_FAILED | LISTING_CLOSED | ...
+  title     String
+  body      String?
+  entityType String? @map("entity_type")
+  entityId   String? @map("entity_id")
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model EmailReport {
+  id         String        @id @default(cuid())
+  reportDate DateTime      @map("report_date") @db.Date
+  kind       String        @default("daily") // daily | test
+  subject    String
+  htmlBody   String        @map("html_body")
+  textBody   String        @map("text_body")
+  sendMode   EmailSendMode @map("send_mode")
+  sentAt     DateTime?     @map("sent_at")
+  skippedReason String?    @map("skipped_reason") // e.g. "no valuable news + skip preference"
+  error      String?
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  @@unique([reportDate, kind])
+  @@map("email_reports")
+}
