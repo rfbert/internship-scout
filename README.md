@@ -7,8 +7,10 @@ one says about visa sponsorship, and puts the survivors in a review queue where
 each one takes about ten seconds to judge. What you accept becomes an application
 the tracker follows to its outcome.
 
-Every score in the screenshots below was computed by the rules in this repository.
-None of them were typed in.
+**[→ Open the live demo](https://internship-scout-internship-rod.vercel.app)** — no
+sign-in, nothing to install. The companies and postings are invented; the scores
+attached to them are not. Every band, component breakdown and sponsorship verdict
+you see was computed by the rules in this repository when the demo was seeded.
 
 ![The dashboard](docs/screenshots/dashboard.png)
 
