@@ -8,8 +8,10 @@ import { TOKEN_TEXT } from "@/lib/format";
 import { resolveScoringKnobs } from "@/server/scoring";
 import { readUiPrefs } from "@/server/ui-prefs";
 import { TARGET_SEASON_RX } from "@/app/api/settings/validation";
+import { isDemoMode } from "@/server/demo";
 import { SettingsForm, type SettingsFormValues } from "./settings-form";
 import { DangerZone } from "./danger-zone";
+import { DemoZone } from "./demo-zone";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +70,10 @@ export default async function SettingsPage() {
     prisma.company.count({ where: { isSample: true } }),
   ]);
 
+  // Resolved once here and passed down, so the form and the panel below cannot
+  // disagree about whether this deployment is the public demo.
+  const demo = isDemoMode();
+
 
   /* The legend expands the marks that are ON THIS PAGE. `DEF` was not one of
      them and never had been: the ladder and the role rows print the lowercase
@@ -100,7 +106,7 @@ export default async function SettingsPage() {
         }
       />
 
-      <SettingsForm initial={initial} />
+      <SettingsForm initial={initial} demo={demo} />
 
       {/* 7 · ENVIRONMENT — read-only. Mirrors the server's own resolution. */}
       <section className="mt-6">
@@ -140,11 +146,19 @@ export default async function SettingsPage() {
         </p>
       </section>
 
-      {/* 8 · DANGER ZONE ─────────────────────────────────────────────────── */}
+      {/* 8 · DANGER ZONE — or, on the public demo, the way back from one ──── */}
       <section className="mt-6">
-        <SectionRule label="Danger zone" tick="carmine" right="IRREVERSIBLE" />
+        {demo ? (
+          <SectionRule label="Demo" right="PUBLIC · INVENTED DATA" />
+        ) : (
+          <SectionRule label="Danger zone" tick="carmine" right="IRREVERSIBLE" />
+        )}
         <div className="px-1 pt-2.5">
-          <DangerZone sampleListings={sampleListings} sampleCompanies={sampleCompanies} />
+          {demo ? (
+            <DemoZone />
+          ) : (
+            <DangerZone sampleListings={sampleListings} sampleCompanies={sampleCompanies} />
+          )}
         </div>
       </section>
 

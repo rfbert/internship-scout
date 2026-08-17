@@ -128,7 +128,14 @@ export interface SettingsFormValues {
   notationMode: NotationMode;
 }
 
-export function SettingsForm({ initial }: { initial: SettingsFormValues }) {
+export function SettingsForm({
+  initial,
+  demo = false,
+}: {
+  initial: SettingsFormValues;
+  /** Public demo: saving is refused server-side, so do not offer it. */
+  demo?: boolean;
+}) {
   const router = useRouter();
   const [weights, setWeights] = useState<Record<ScoreComponent, string>>(() =>
     Object.fromEntries(
@@ -741,8 +748,8 @@ export function SettingsForm({ initial }: { initial: SettingsFormValues }) {
       <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-rule pt-3">
         {/* `Stamp` renders `type="button"`, which cannot submit a form — so the
             filing verb uses the same ink-stamp class string directly. */}
-        <button type="submit" className={btnPrimary} disabled={saving || formInvalid}>
-          {saving ? "Saving…" : "Save settings"}
+        <button type="submit" className={btnPrimary} disabled={saving || formInvalid || demo}>
+          {saving ? "Saving…" : demo ? "Saving disabled on the demo" : "Save settings"}
         </button>
         {formInvalid ? (
           <span className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-carmine">

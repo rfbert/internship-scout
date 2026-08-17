@@ -2,6 +2,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ApiError, handler, ok, parseBody } from "@/server/api-helpers";
+import { assertAllowedOnDemo } from "@/server/demo";
 
 const bodySchema = z.object({
   enabled: z.boolean().optional(),
@@ -13,6 +14,10 @@ const bodySchema = z.object({
 
 export const PATCH = handler(
   async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+    assertAllowedOnDemo(
+      "Editing the source registry is disabled on the public demo — it is deployment configuration, not per-record data."
+    );
+
     const { id } = await params;
     const body = await parseBody(req, bodySchema);
 

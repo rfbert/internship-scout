@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ApiError, handler, ok, parseBody, validationMessage } from "@/server/api-helpers";
+import { assertAllowedOnDemo } from "@/server/demo";
 
 const PRIORITIES = ["URGENT", "HIGH", "MEDIUM", "LOW"] as const;
 
@@ -94,6 +95,10 @@ const deleteSchema = z.object({
  */
 export const DELETE = handler(
   async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+    assertAllowedOnDemo(
+      "Deleting tracker records is disabled on the public demo. Move it to Withdrawn or Closed instead, or use Reset demo data."
+    );
+
     const { id } = await params;
     // A bodyless DELETE is valid and means "not interested".
     const raw = await req.json().catch(() => ({}));

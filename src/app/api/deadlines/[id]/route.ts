@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ApiError, handler, ok, parseBody } from "@/server/api-helpers";
+import { assertAllowedOnDemo } from "@/server/demo";
 
 const patchSchema = z.object({
   dueAt: z.coerce.date().optional(),
@@ -32,6 +33,8 @@ export const PATCH = handler(
 
 export const DELETE = handler(
   async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
+    assertAllowedOnDemo("Deleting deadlines is disabled on the public demo. Use Reset demo data instead.");
+
     const { id } = await params;
 
     const existing = await prisma.deadline.findUnique({ where: { id }, select: { id: true } });

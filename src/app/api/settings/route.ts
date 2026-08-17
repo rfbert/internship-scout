@@ -3,11 +3,16 @@ import { prisma } from "@/lib/prisma";
 import { ApiError, currentUser, handler, ok, parseBody } from "@/server/api-helpers";
 import { DEFAULT_WEIGHTS } from "@/lib/constants";
 import { settingsBodySchema, validateSettingsSemantics } from "./validation";
+import { assertAllowedOnDemo } from "@/server/demo";
 
 /** "2028-06-15" → UTC-midnight Date, matching how the gates read it (getUTC*). */
 const parseGradDate = (iso: string) => new Date(`${iso}T00:00:00Z`);
 
 export const PATCH = handler(async (req: Request) => {
+  assertAllowedOnDemo(
+    "Changing the scoring settings is disabled on the public demo — the weights are global, so one edit would re-rank every listing every later visitor sees."
+  );
+
   const body = await parseBody(req, settingsBodySchema);
   // All validation happens before the first DB round-trip.
   const semanticError = validateSettingsSemantics(body);

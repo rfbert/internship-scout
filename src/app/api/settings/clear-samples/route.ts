@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { handler, ok } from "@/server/api-helpers";
+import { assertAllowedOnDemo } from "@/server/demo";
 
 /**
  * Removes the labeled seed/sample data: sample listings (with their dependent
@@ -7,6 +8,10 @@ import { handler, ok } from "@/server/api-helpers";
  * with no listings. Real data is never touched.
  */
 export const POST = handler(async () => {
+  assertAllowedOnDemo(
+    "Clearing the sample data is disabled on the public demo — it would empty the demo for everyone. Use Reset demo data instead."
+  );
+
   const result = await prisma.$transaction(async (tx) => {
     // Applications reference listings without cascade — remove them first.
     const applications = await tx.application.deleteMany({

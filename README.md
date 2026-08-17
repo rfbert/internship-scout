@@ -126,6 +126,23 @@ Migrations run over the provider's *direct* connection string when one exists
 `DATABASE_URL`. Prisma Migrate takes an advisory lock, which cannot survive a
 transaction-mode pooler; runtime still uses the pooled `DATABASE_URL`.
 
+### Demo mode
+
+Set `DEMO_MODE=1` and the app becomes safe to hand to strangers. It stays
+usable — work the review queue, move applications through the tracker, write
+notes, import a posting — because a demo you cannot use is a screenshot. What
+it refuses is the small set of actions that are *global* rather than
+per-record: rewriting the scoring weights (one visitor would re-rank every
+listing for every later visitor), editing the source registry, deleting
+records, and clearing the sample data.
+
+`POST /api/demo/reset` puts everything back by truncating and re-running the
+seed, so the dataset is rebuilt by the engines rather than restored from a
+dump. It is exposed as a button on the Settings page and runs nightly on a
+cron. Both are inert unless `DEMO_MODE` is on, and the reset function refuses
+to run without it too — a guard only at the edge is one careless import away
+from being bypassed.
+
 ## Tests
 
 ```bash
