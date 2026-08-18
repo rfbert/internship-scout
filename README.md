@@ -4,7 +4,7 @@ A decision tool for an internship search that got too big to hold in a spreadshe
 
 It reads job postings, scores them against a weighted rubric, works out what each
 one says about visa sponsorship, and puts the survivors in a review queue where
-each one takes about ten seconds to judge. What you accept becomes an application
+each one is a single decision to judge. What you accept becomes an application
 the tracker follows to its outcome.
 
 **[→ Open the live demo](https://internship-scout-internship-rod.vercel.app)** — no
@@ -151,8 +151,8 @@ npm run test:integration   # API routes against a real Postgres
 npm run check:contrast     # asserts WCAG AA in both themes, no browser needed
 ```
 
-CI runs all of these on every push against a Postgres service container, plus a
-production build.
+CI runs all of these on pushes to `main` and on every pull request, against a
+Postgres service container, plus a production build.
 
 ## Stack
 
